@@ -273,5 +273,5 @@ Write-host "# ! Fin du script !   #"
 write-host "#                     #"
 write-host " #####################"
 write-host
-#singature du script retirer
+#signature du script retirer
 
