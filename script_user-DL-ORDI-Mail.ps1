@@ -1,12 +1,13 @@
-﻿cls
-#se script est un script signer, seule ce type de script peut etre utiliser sur ce domaine, pour savoir comment signer un script referer vous au cahier de consigne 
-#crée a 
-#date : 
-#par : 
-#but : créé rapidement des utilisateurs, ordinateurs, groupe, dans l'active directory à partir d'un fichier csv, ainsi que crée des boites au lettres pour ces utilisateurs
-#la parti sur les boite au lettres est à éxécuter sur le serveur Exchange
+﻿Clear-Host
+#script signez, seule se type de script pour etre utiliser sur ce domaine (lab)
+#crée a ville
+#date :  jj/mm/yyyy
+#par : admin-name
+#but : créé rapidement des utilisateurs, ordinateurs, groupe, dans l'active directory à partir d'un fichier csv, ainsi que crée des boites au lettres exchange pour ces utilisateurs
+#la parti sur les boite au lettres est à éxécuter sur le serveur Exchange ou sur exchange magement shell
 
-#déclaration d'un compteur pour compter le nombre d'utilisateurs/DL/ordinateurs/boite au lettre crées
+#variable recupérant distinguishedname et le nom de domaine 
+#variable pour compter le nombre d'utilisateurs/DL/ordinateurs/boite au lettre crées
 $dndomain = (Get-ADDomain).distinguishedname
 $dnsroot = (Get-ADDomain).dnsroot
 $compteur_user = 0
@@ -15,24 +16,68 @@ $compteur_DL = 0
 $compteur_mail = 0
 
 # /!\ specifié les chemins des fichiers csv dans les variable en dessous 
-$chemin_fichier_user = "\\admin.lab\script\crea_user.csv"
-$chemin_fichier_DL = "\\admin.lab\script\\DL.csv"
-$chemin_fichier_ordinateur = "\\admin.lab\script\ordinateur.csv"
+$Dossiercsv = "D:\admin\Scripts\csv\"
+$chemin_fichier_user = Join-Path -Path $Dossiercsv -ChildPath "utilisateurs.csv"
+$chemin_fichier_DL = Join-Path -Path $Dossiercsv -ChildPath "DL.csv"
+$chemin_fichier_ordinateur = Join-Path -Path $Dossiercsv -ChildPath "ordinateur.csv"
 
 
-# on encode le fichier csv en utf8 pour ne pas avoir de probleme avec les accents...
-$UTF8 = @($chemin_fichier_user,$chemin_fichier_DL,$chemin_fichier_ordinateur)
-foreach ($fichier in $UTF8)
-{
-$content = Get-Content -Path $fichier
-Set-Content -path $fichier -Value $content -Encoding UTF8
+# Initialisation du compteur de fichiers valides
+$CompteurFichiersCsv = 0
+#Test de présence de chaque fichier
+
+$test_User = Test-Path -Path $chemin_fichier_user
+if ($test_User) { $CompteurFichiersCsv++ }
+
+$test_DL = Test-Path -Path $chemin_fichier_DL
+if ($test_DL) { $CompteurFichiersCsv++ }
+
+$Test_Ordi = Test-Path -Path $chemin_fichier_ordinateur
+if ($Test_Ordi) { $CompteurFichiersCsv++ }
+
+
+# Vérification: si aucun fichier n'est présent (compteur à 0), fin du script.
+if ($CompteurFichiersTrouves -eq 0) {
+    Write-Error "aucun fichier csv trouver dans le dossier $Dossiercsv, verifier le nom et l'emplacement des fichiers. arret du script"
+    Exit
 }
 
-#import des fichiers csv necessaire pour le script
-$importuser = import-csv -Path "$chemin_fichier_user" -Delimiter ";"
-$importDL = import-Csv -Path "$chemin_fichier_DL" -delimiter ";"
-$import_ordi = import-Csv -Path "$chemin_fichier_ordinateur" -Delimiter ";"
-$import_mail = import-Csv -Path "$chemin_fichier_user" -Delimiter ";"
+# Traitement et importation selon les resultats des tests
+
+#  Section UTILISATEURS 
+if ($Test_User) {
+    Write-Host "encodage et import du fichier utilisateurs.csv..." -ForegroundColor Green
+    $content = Get-Content -Path $chemin_fichier_user -Raw
+    Set-Content -Path $chemin_fichier_user -Value $content -Encoding UTF8
+    $importuser = Import-Csv -Path $chemin_fichier_user -Delimiter ";"
+    $import_mail = $importuser
+} else {
+    Write-Warning "Le fichier utilisateurs.csv est absent."
+    $importuser = $null
+    $import_mail = $null
+}
+
+#  Section DL 
+if ($Test_DL) {
+    Write-Host "encodage et import du fichier DL.csv..." -ForegroundColor Green
+    $content = Get-Content -Path $chemin_fichier_DL -Raw
+    Set-Content -Path $chemin_fichier_DL -Value $content -Encoding UTF8
+    $importDL = Import-Csv -Path $chemin_fichier_DL -Delimiter ";"
+} else {
+    Write-Warning "Le fichier DL.csv est absent."
+    $importDL = $null
+}
+
+#  Section ORDINATEURS 
+if ($Test_Ordi) {
+    Write-Host "encodage et import du fichier ordinateur.csv..." -ForegroundColor Green
+    $content = Get-Content -Path $chemin_fichier_ordinateur -Raw
+    Set-Content -Path $chemin_fichier_ordinateur -Value $content -Encoding UTF8
+    $import_ordi = Import-Csv -Path $chemin_fichier_ordinateur -Delimiter ";"
+} else {
+    Write-Warning "Le fichier ordinateur.csv est absent."
+    $import_ordi = $null
+}
 
 
 #mise en place d'un menu 
@@ -90,7 +135,7 @@ Write-Host ""
               $path = "ou=users,$user_chemin"
               $password = $item.password
               $expiration = $item.expiration
-              $secure_pwd = ConvertTo-SecureString -AsPlainText "$password" -Force
+              $pwd_user = ConvertTo-SecureString -AsPlainText "$password" -Force
               $groupe = $item.groupe
               $alias = "$prenom"+"."+"$nom" 
               $email = "$alias"+"@"+"$dnsroot" -replace ' ','-' -replace "é","e" -replace "ù","u" -replace "à","a" -replace "ë","e" -replace "ô","o" -replace "ç","c"
@@ -100,7 +145,7 @@ Write-Host ""
                 -Surname $nom `
                 -GivenName $prenom `
                 -DisplayName $display `
-                -AccountPassword $secure_pwd `
+                -AccountPassword $pwd_user `
                 -SamAccountName $login `
                 -UserPrincipalName $login@$dnsroot `
                 -Path $path `
@@ -191,7 +236,6 @@ Write-Host ""
              New-ADOrganizationalUnit -Name ordinateurs -path $ordi_chemin
             }
             $nomordi = $item_ordi.ordi
-            $cn_ordi = $item_ordi.cn
             $pathordi = "ou=ordinateurs,$ordi_chemin"
 
             $dn_ordi = (Get-ADGroup -Filter { Name -like $groupe_ordi }-SearchScope Subtree).distinguishedName
@@ -202,12 +246,12 @@ Write-Host ""
              }
             else
             {
-            New-ADGroup -Name "GG_$groupe_ordi" -Path $ordi_chemin -GroupScope Global -GroupCategory Security 
+            New-ADGroup -Name "GG_BRI1_$groupe_ordi" -Path $ordi_chemin -GroupScope Global -GroupCategory Security 
             }
 
             New-ADComputer -Name $nomordi -path $pathordi
             Add-ADGroupMember -Identity $dn_ordi -Members "cn=$nomordi,$pathordi"
-            Add-ADGroupMember -Identity "$cn_ordi"+"",$dndomain" -Members "$dn_ordi"
+            Add-ADGroupMember -Identity "CN=GG_BRI1_ordinateurs,OU=ordinateurs,OU=Administration,$dndomain" -Members "$dn_ordi"
             $compteur_ordi ++
 
              }
@@ -216,13 +260,12 @@ Write-Host ""
 
         "4"
         {
-        # permet de pouvoir utiliser les commandes exchange sur PowerShell
+        # permet de pouvoir utiliser les commandes exchange sur ise
         Add-PSSnapin Microsoft.Exchange.Management.PowerShell.SnapIn
             foreach ( $i in $import_mail) 
             { 
             $user = $i.login
-            $nom_domain = $i.domain
-            $login_mail = "$user@$nom_domain" 
+            $login_mail = "$user@pc.bri1.empirex.defense.gouv.fr" 
             $alias_mail = "$($i.prenom).$($i.nom)"-replace ' ','-' -replace "é","e" -replace "ù","u" -replace "à","a" -replace "ë","e" -replace "ô","o" -replace "ç","c" 
             $bdd = "BDD_MailBox_$($i.BaL)s"
             $grade_mail = $i.grade
@@ -243,7 +286,7 @@ Write-Host ""
         "5"
         {
         #choix 5 pour quitter le script
-        cls
+        Clear-Host
         Write-Host
         Write-Host  "Vous avez choisi de quitter le menu ..."
         Write-Host
@@ -261,7 +304,7 @@ Write-Host ""
 Write-Host ""
 Write-Host ""
 pause
-cls
+Clear-Host
 }
 
 while ($choix -ne '5')
@@ -273,5 +316,4 @@ Write-host "# ! Fin du script !   #"
 write-host "#                     #"
 write-host " #####################"
 write-host
-#signature du script retirer
-
+#ajoutez signature du script juste après 
