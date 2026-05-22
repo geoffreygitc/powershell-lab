@@ -246,12 +246,12 @@ Write-Host ""
              }
             else
             {
-            New-ADGroup -Name "GG_BRI1_$groupe_ordi" -Path $ordi_chemin -GroupScope Global -GroupCategory Security 
+            New-ADGroup -Name "GG_$groupe_ordi" -Path $ordi_chemin -GroupScope Global -GroupCategory Security 
             }
 
             New-ADComputer -Name $nomordi -path $pathordi
             Add-ADGroupMember -Identity $dn_ordi -Members "cn=$nomordi,$pathordi"
-            Add-ADGroupMember -Identity "CN=GG_BRI1_ordinateurs,OU=ordinateurs,OU=Administration,$dndomain" -Members "$dn_ordi"
+            Add-ADGroupMember -Identity "CN=GG_ordinateurs,OU=ordinateurs,OU=Administration,$dndomain" -Members "$dn_ordi"
             $compteur_ordi ++
 
              }
@@ -265,7 +265,8 @@ Write-Host ""
             foreach ( $i in $import_mail) 
             { 
             $user = $i.login
-            $login_mail = "$user@pc.bri1.empirex.defense.gouv.fr" 
+            $domain = $i.domain
+            $login_mail = "$user@$domain" 
             $alias_mail = "$($i.prenom).$($i.nom)"-replace ' ','-' -replace "é","e" -replace "ù","u" -replace "à","a" -replace "ë","e" -replace "ô","o" -replace "ç","c" 
             $bdd = "BDD_MailBox_$($i.BaL)s"
             $grade_mail = $i.grade
